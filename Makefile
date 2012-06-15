@@ -7,13 +7,13 @@ CFLAGS=-Wall -g -pedantic -ansi
 
 all:		prog
 
-prog: main.c
-		$(CC) $(CFLAGS) -o checkfs main.c
+prog: checkfs.c
+		$(CC) $(CFLAGS) -o checkfs checkfs.c
 
 clean:
 		rm checkfs
 
-debug: main
+debug: checkfs
 		rm checkfs
-		$(CC) $(CFLAGS) -o fsc_debug main.c
-		gdb fsc_debug
+		$(CC) $(CFLAGS) -o checkfs checkfs.c
+		gdb checkfs
