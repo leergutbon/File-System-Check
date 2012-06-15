@@ -8,12 +8,12 @@ CFLAGS=-Wall -g -pedantic -ansi
 all:		prog
 
 prog: main.c
-		$(CC) $(CFLAGS) -o fsc main.c
+		$(CC) $(CFLAGS) -o checkfs main.c
 
 clean:
-		rm fsc
+		rm checkfs
 
 debug: main
-		rm fsc
+		rm checkfs
 		$(CC) $(CFLAGS) -o fsc_debug main.c
 		gdb fsc_debug
