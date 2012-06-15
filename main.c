@@ -86,12 +86,8 @@ int main(int argc, char *argv[]){
   if (diskSize % SECTOR_SIZE != 0){
     printf("Warning: disk size is not a multiple of sector size!\n");
   }
-  fseek(disk, 1 * SECTOR_SIZE, SEEK_SET);
-  if (fread(ptr, 1, SECTOR_SIZE, disk) != SECTOR_SIZE) {
-    error("cannot read partition table from disk image '%s'", diskName);
-  }
   
-  /* read partion tables */
+  /* read partition table */
   fseek(disk, 1 * SECTOR_SIZE, SEEK_SET);
   if (fread(ptr, 1, SECTOR_SIZE, disk) != SECTOR_SIZE) {
     error("cannot read partition table from disk image '%s'", diskName);
