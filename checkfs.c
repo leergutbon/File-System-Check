@@ -1,12 +1,12 @@
-/*--- main.c ---*/
+/*--- checkfs.c ---*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 
-#define SECTOR_SIZE	512
-#define NPE		(SECTOR_SIZE / sizeof(PartEntry))
-#define DESCR_SIZE	20
+#define SECTOR_SIZE 512
+#define DESCR_SIZE  20
+#define NPE         (SECTOR_SIZE / sizeof(PartEntry))
 
 
 typedef struct {
@@ -46,17 +46,17 @@ void convertPartitionTable(PartEntry *e, int n) {
 
   for (i = 0; i < n; i++) {
     p = (unsigned char *) &e[i];
-    e[i].type = getNumber(p + 0);
+    e[i].type  = getNumber(p + 0);
     e[i].start = getNumber(p + 4);
-    e[i].size = getNumber(p + 8);
+    e[i].size  = getNumber(p + 8);
   }
 }
 
 /*----------------------------------------------------------------------------*/
 
 int main(int argc, char *argv[]){
-  FILE *disk;
   char *diskName;
+  FILE *disk;
   unsigned long diskSize;
   unsigned long numSectors;
   unsigned long partLast;
@@ -64,38 +64,45 @@ int main(int argc, char *argv[]){
   char c;
 
   if (argc != 2) {
-    error("Wrong amount of arguments.\nUsage: fsc <disk-image>\n");
-    exit(1);
+    error("Wrong number of arguments.\nUsage: fsc <disk-image>\n");
   }
+
   /* open disk image, only read and binary */
-  disk = fopen(argv[1], "r+b");
-  if (disk == NULL) {
+  diskName = argv[1];
+  disk = fopen(diskName, "rb");
+  if(disk == NULL){
     error("cannot open disk image file '%s'", argv[1]);
   }
   
   /* read image size */
-  diskName = argv[1];
   fseek(disk, 0, SEEK_END);
   diskSize = ftell(disk);
   numSectors = diskSize / SECTOR_SIZE;
-  printf("Disk '%s' has %lu (0x%lX) sectors.\n", diskName, numSectors, numSectors);
-  if (diskSize % SECTOR_SIZE != 0){
+  fclose(disk);
+  printf("Disk '%s' has %lu (0x%lX) sectors.\n",
+          diskName, numSectors, numSectors);
+  if(diskSize % SECTOR_SIZE != 0){
     printf("Warning: disk size is not a multiple of sector size!\n");
   }
-  
+    
+  disk = fopen(diskName, "rb");
   /* read partition table */
   fseek(disk, 1 * SECTOR_SIZE, SEEK_SET);
-  if (fread(ptr, 1, SECTOR_SIZE, disk) != SECTOR_SIZE) {
+  if(fread(ptr, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
     error("cannot read partition table from disk image '%s'", diskName);
   }
-
-  /* close file */
   fclose(disk);
-    
+printf("size: %d\n", sizeof(ptr));
+
   convertPartitionTable(ptr, NPE);
   /* show partition table */
   printf("Partitions:\n");
   printf(" # b type       start      last       size       description\n");
+  
+
+
+
+
   for (i = 0; i < NPE; i++) {
     if (ptr[i].type != 0) {
       partLast = ptr[i].start + ptr[i].size - 1;
