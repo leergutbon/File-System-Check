@@ -3,7 +3,7 @@
 #
 
 CC=gcc
-CFLAGS=-Wall -g -pedantic -ansi
+CFLAGS=-Wall -m32 -g -pedantic -ansi
 
 all:		prog
 
