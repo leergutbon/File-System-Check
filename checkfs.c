@@ -40,7 +40,6 @@ unsigned long getNumber(uint8_t *p) {
          (uint32_t) *(p + 3) <<  0;
 }
 
-
 void convertPartitionTable(PartEntry *e, uint32_t n) {
   uint32_t i;
   uint8_t *p;
@@ -60,9 +59,7 @@ int main(int argc, char *argv[]){
   uint8_t *diskName;
   uint32_t diskSize;
   uint32_t numSectors;
-  uint32_t partLast;
   uint32_t i, j;
-  uint8_t c;
 
   if (argc != 2) {
     error("Wrong number of arguments.\nUsage: fsc <disk-image>\n");
@@ -93,17 +90,11 @@ int main(int argc, char *argv[]){
     error("cannot read partition table from disk image '%s'", diskName);
   }
   fclose(disk);
-printf("size: %d\n", (int)sizeof(ptr));
 
   convertPartitionTable(ptr, NPE);
   /* show partition table */
-  printf("Partitions:\n");
+  /*printf("Partitions:\n");
   printf(" # b type       start      last       size       description\n");
-  
-
-
-
-
   for (i = 0; i < NPE; i++) {
     if (ptr[i].type != 0) {
       partLast = ptr[i].start + ptr[i].size - 1;
@@ -129,7 +120,16 @@ printf("size: %d\n", (int)sizeof(ptr));
       }
     }
     printf("\n");
+  }*/
+  /* count used partitions */
+  j=0;
+  for(i=0; i<NPE; i++){
+    if(ptr[i].type != 0){
+      j++;
+    }
   }
+  printf("cnt: %d\n", j);
+  
   
   return 0;
 }
