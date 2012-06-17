@@ -1,6 +1,7 @@
 /*--- checkfs.c ---*/
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
 
@@ -10,10 +11,10 @@
 
 
 typedef struct {
-  unsigned long type;
-  unsigned long start;
-  unsigned long size;
-  char descr[DESCR_SIZE];
+  uint32_t type;
+  uint32_t start;
+  uint32_t size;
+  uint8_t descr[DESCR_SIZE];
 } PartEntry;
 
 PartEntry ptr[NPE];
@@ -32,20 +33,20 @@ void error(char *fmt, ...) {
   exit(1);
 }
 
-unsigned long getNumber(unsigned char *p) {
-  return (unsigned long) *(p + 0) << 24 |
-         (unsigned long) *(p + 1) << 16 |
-         (unsigned long) *(p + 2) <<  8 |
-         (unsigned long) *(p + 3) <<  0;
+unsigned long getNumber(uint8_t *p) {
+  return (uint32_t) *(p + 0) << 24 |
+         (uint32_t) *(p + 1) << 16 |
+         (uint32_t) *(p + 2) <<  8 |
+         (uint32_t) *(p + 3) <<  0;
 }
 
 
-void convertPartitionTable(PartEntry *e, int n) {
-  int i;
-  unsigned char *p;
+void convertPartitionTable(PartEntry *e, uint32_t n) {
+  uint32_t i;
+  uint8_t *p;
 
   for (i = 0; i < n; i++) {
-    p = (unsigned char *) &e[i];
+    p = (uint8_t *) &e[i];
     e[i].type  = getNumber(p + 0);
     e[i].start = getNumber(p + 4);
     e[i].size  = getNumber(p + 8);
@@ -68,8 +69,8 @@ int main(int argc, char *argv[]){
   }
 
   /* open disk image, only read and binary */
-  diskName = argv[1];
-  disk = fopen(diskName, "rb");
+  diskName = (uint8_t *)argv[1];
+  disk = fopen((char *)diskName, "rb");
   if(disk == NULL){
     error("cannot open disk image file '%s'", argv[1]);
   }
@@ -80,19 +81,19 @@ int main(int argc, char *argv[]){
   numSectors = diskSize / SECTOR_SIZE;
   fclose(disk);
   printf("Disk '%s' has %lu (0x%lX) sectors.\n",
-          diskName, numSectors, numSectors);
+          diskName, (unsigned long)numSectors, (unsigned long)numSectors);
   if(diskSize % SECTOR_SIZE != 0){
     printf("Warning: disk size is not a multiple of sector size!\n");
   }
     
-  disk = fopen(diskName, "rb");
+  disk = fopen((char *)diskName, "rb");
   /* read partition table */
   fseek(disk, 1 * SECTOR_SIZE, SEEK_SET);
   if(fread(ptr, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
     error("cannot read partition table from disk image '%s'", diskName);
   }
   fclose(disk);
-printf("size: %d\n", sizeof(ptr));
+printf("size: %d\n", (int)sizeof(ptr));
 
   convertPartitionTable(ptr, NPE);
   /* show partition table */
@@ -111,11 +112,11 @@ printf("size: %d\n", sizeof(ptr));
     }
     printf("%2d %s 0x%08lX 0x%08lX 0x%08lX 0x%08lX ",
            i,
-           ptr[i].type & 0x80000000 ? "*" : " ",
-           ptr[i].type & 0x7FFFFFFF,
-           ptr[i].start,
-           partLast,
-           ptr[i].size);
+           (unsigned long)ptr[i].type & 0x80000000 ? "*" : " ",
+           (unsigned long)ptr[i].type & 0x7FFFFFFF,
+           (unsigned long)ptr[i].start,
+           (unsigned long)partLast,
+           (unsigned long)ptr[i].size);
     for (j = 0; j < DESCR_SIZE; j++) {
       c = ptr[i].descr[j];
       if (c == '\0') {
