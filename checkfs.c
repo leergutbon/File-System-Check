@@ -61,6 +61,10 @@ int main(int argc, char *argv[]){
   uint32_t numSectors;
   uint32_t i, j;
 
+  /* only for print partition table */
+  /*uint32_t partLast;
+  uint8_t c;*/
+
   if (argc != 2) {
     error("Wrong number of arguments.\nUsage: fsc <disk-image>\n");
   }
@@ -92,7 +96,7 @@ int main(int argc, char *argv[]){
   fclose(disk);
 
   convertPartitionTable(ptr, NPE);
-  /* show partition table */
+  /* print partition table */
   /*printf("Partitions:\n");
   printf(" # b type       start      last       size       description\n");
   for (i = 0; i < NPE; i++) {
@@ -121,11 +125,25 @@ int main(int argc, char *argv[]){
     }
     printf("\n");
   }*/
-  /* count used partitions */
+
+  /* read partition */
   j=0;
   for(i=0; i<NPE; i++){
     if(ptr[i].type != 0){
       j++;
+      /* checks partion for EOS32 partition type 
+       * 88 is decimal, EOS32 have 0x00000058 as partition type
+       * 88 == 0x58 */
+      if(ptr[i].type == 0){
+        /* nothing to do, next partion */
+      }else if(((unsigned long)ptr[i].type & 0x7FFFFFFF) == 89){
+        printf("Warning: Partion %2d is a EOS32 swap partition, can't check this type.\n", i);
+      }else if(((unsigned long)ptr[i].type & 0x7FFFFFFF) == 88){
+        /* check partion */
+        printf("Check partition %2d.\n", i);
+      }else{
+        printf("Warning: %2d unknown partition type.\n", i);
+      }
     }
   }
   printf("cnt: %d\n", j);
