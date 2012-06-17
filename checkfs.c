@@ -56,12 +56,12 @@ void convertPartitionTable(PartEntry *e, int n) {
 
 int main(int argc, char *argv[]){
   FILE *disk;
-  char *diskName;
-  unsigned long diskSize;
-  unsigned long numSectors;
-  unsigned long partLast;
-  int i, j;
-  char c;
+  uint8_t *diskName;
+  uint32_t diskSize;
+  uint32_t numSectors;
+  uint32_t partLast;
+  uint32_t i, j;
+  uint8_t c;
 
   if (argc != 2) {
     error("Wrong amount of arguments.\nUsage: fsc <disk-image>\n");
