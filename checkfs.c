@@ -57,6 +57,7 @@ void convertPartitionTable(PartEntry *e, uint32_t n) {
 int main(int argc, char *argv[]){
   FILE *disk;
   uint8_t *diskName;
+  uint8_t partNumber;
   uint32_t diskSize;
   uint32_t numSectors;
   uint32_t i, j;
@@ -65,12 +66,13 @@ int main(int argc, char *argv[]){
   /*uint32_t partLast;
   uint8_t c;*/
 
-  if (argc != 2) {
+  if (argc != 3) {
     error("Wrong number of arguments.\nUsage: fsc <disk-image>\n");
   }
 
   /* open disk image, only read and binary */
-  diskName = (uint8_t *)argv[1];
+  diskName = (uint8_t *) argv[1];
+  partNumber = (uint8_t) *argv[2] - 48; /* argv is char */
   disk = fopen((char *)diskName, "rb");
   if(disk == NULL){
     error("cannot open disk image file '%s'", argv[1]);
@@ -127,27 +129,23 @@ int main(int argc, char *argv[]){
   }*/
 
   /* read partition */
-  j=0;
-  for(i=0; i<NPE; i++){
-    if(ptr[i].type != 0){
-      j++;
-      /* checks partion for EOS32 partition type 
-       * 88 is decimal, EOS32 have 0x00000058 as partition type
-       * 88 == 0x58 */
-      if(ptr[i].type == 0){
-        /* nothing to do, next partion */
-      }else if(((unsigned long)ptr[i].type & 0x7FFFFFFF) == 89){
-        printf("Warning: Partion %2d is a EOS32 swap partition, can't check this type.\n", i);
-      }else if(((unsigned long)ptr[i].type & 0x7FFFFFFF) == 88){
-        /* check partion */
-        printf("Check partition %2d.\n", i);
-      }else{
-        printf("Warning: %2d unknown partition type.\n", i);
-      }
+  if(ptr[partNumber].type != 0){
+    /* checks partion for EOS32 partition type 
+     * 88 is decimal, EOS32 have 0x00000058 as partition type
+     * 88 == 0x58 */
+    if(ptr[partNumber].type == 0){
+      /* nothing to do, next partion */
+    }else if(((unsigned long)ptr[partNumber].type & 0x7FFFFFFF) == 89){
+      printf("Warning: Partion %2d is a EOS32 swap partition, can't check this type.\n", partNumber);
+    }else if(((unsigned long)ptr[partNumber].type & 0x7FFFFFFF) == 88){
+      /* check partion */
+      printf("Check partition %2d.\n", partNumber);
+    }else{
+      printf("Warning: %2d unknown partition type.\n", partNumber);
     }
+  }else{
+    error("Partition number %d is not a partition", partNumber);
   }
-  printf("cnt: %d\n", j);
-  
   
   return 0;
 }
