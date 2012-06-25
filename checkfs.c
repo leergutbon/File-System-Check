@@ -6,6 +6,7 @@
 #include <stdarg.h>
 
 #define SECTOR_SIZE 512
+#define BLOCK_SIZE  4096
 #define DESCR_SIZE  20
 #define NPE         (SECTOR_SIZE / sizeof(PartEntry))
 
@@ -22,7 +23,7 @@ PartEntry ptr[NPE];
 /*----------------------------------------------------------------------------*/
 
 /* error function */
-void error(char *fmt, ...) {
+void error(int errorCode, char *fmt, ...) {
   va_list ap;
 
   va_start(ap, fmt);
@@ -30,7 +31,7 @@ void error(char *fmt, ...) {
   vprintf(fmt, ap);
   printf("\n");
   va_end(ap);
-  exit(1);
+  exit(errorCode);
 }
 
 unsigned long getNumber(uint8_t *p) {
@@ -57,25 +58,27 @@ void convertPartitionTable(PartEntry *e, uint32_t n) {
 int main(int argc, char *argv[]){
   FILE *disk;
   uint8_t *diskName;
-  uint8_t partNumber;
+  uint8_t ptrNumber;
+  uint8_t ptrTable[SECTOR_SIZE];
   uint32_t diskSize;
   uint32_t numSectors;
-  uint32_t i, j;
+  uint32_t ptrSize;
+  uint32_t ptrSectors;
 
   /* only for print partition table */
   /*uint32_t partLast;
-  uint8_t c;*/
+  uint8_t i, j, c;*/
 
   if (argc != 3) {
-    error("Wrong number of arguments.\nUsage: fsc <disk-image>\n");
+    error(1, "Wrong number of arguments.\nUsage: fsc <disk-image>\n");
   }
 
   /* open disk image, only read and binary */
   diskName = (uint8_t *) argv[1];
-  partNumber = (uint8_t) *argv[2] - 48; /* argv is char */
+  ptrNumber = (uint8_t) atoi(argv[2]);
   disk = fopen((char *)diskName, "rb");
   if(disk == NULL){
-    error("cannot open disk image file '%s'", argv[1]);
+    error(2, "cannot open disk image file '%s'", argv[1]);
   }
   
   /* read image size */
@@ -83,21 +86,22 @@ int main(int argc, char *argv[]){
   diskSize = ftell(disk);
   numSectors = diskSize / SECTOR_SIZE;
   fclose(disk);
-  printf("Disk '%s' has %lu (0x%lX) sectors.\n",
-          diskName, (unsigned long)numSectors, (unsigned long)numSectors);
+  printf("Disk '%s' has %lu (0x%lX) sectors and %d bytes.\n",
+          diskName, (unsigned long)numSectors,
+          (unsigned long)numSectors, diskSize);
   if(diskSize % SECTOR_SIZE != 0){
     printf("Warning: disk size is not a multiple of sector size!\n");
   }
-    
-  disk = fopen((char *)diskName, "rb");
+  
   /* read partition table */
+  disk = fopen((char *)diskName, "rb");
   fseek(disk, 1 * SECTOR_SIZE, SEEK_SET);
-  if(fread(ptr, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
-    error("cannot read partition table from disk image '%s'", diskName);
+  if(fread(ptrTable, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
+    error(3, "cannot read partition table from disk image '%s'", diskName);
   }
   fclose(disk);
 
-  convertPartitionTable(ptr, NPE);
+  /*convertPartitionTable(ptr, NPE);*/
   /* print partition table */
   /*printf("Partitions:\n");
   printf(" # b type       start      last       size       description\n");
@@ -128,23 +132,27 @@ int main(int argc, char *argv[]){
     printf("\n");
   }*/
 
+
+  
   /* read partition */
-  if(ptr[partNumber].type != 0){
-    /* checks partion for EOS32 partition type 
-     * 88 is decimal, EOS32 have 0x00000058 as partition type
-     * 88 == 0x58 */
-    if(ptr[partNumber].type == 0){
-      /* nothing to do, next partion */
-    }else if(((unsigned long)ptr[partNumber].type & 0x7FFFFFFF) == 89){
-      printf("Warning: Partion %2d is a EOS32 swap partition, can't check this type.\n", partNumber);
-    }else if(((unsigned long)ptr[partNumber].type & 0x7FFFFFFF) == 88){
-      /* check partion */
-      printf("Check partition %2d.\n", partNumber);
+  if(ptrNumber >= 0 && ptrNumber <= 15){
+    if(ptr[ptrNumber].type != 0 ){
+      /* checks partion for EOS32 partition type 
+       * 88 is decimal, EOS32 have 0x00000058 as partition type
+       * 88 == 0x58 */
+      if(((unsigned long)ptr[ptrNumber].type & 0x7FFFFFFF) == 89){
+        error(5, "Partion %2d is a EOS32 swap partition, can't check this type.", ptrNumber);
+      }else if(((unsigned long)ptr[ptrNumber].type & 0x7FFFFFFF) == 88){
+        /* check partion */
+        printf("Check partition %2d.\n", ptrNumber);
+      }else{
+        error(5, "Partition %2d unknown type.", ptrNumber);
+      }
     }else{
-      printf("Warning: %2d unknown partition type.\n", partNumber);
+      error(5, "Partition %d doesn't exist.", ptrNumber);
     }
   }else{
-    error("Partition number %d is not a partition", partNumber);
+    error(4, "Illegal partition number %d", ptrNumber);
   }
   
   return 0;
