@@ -32,6 +32,14 @@ unsigned long get4Byte(unsigned char *addr) {
          (unsigned long) addr[3] <<  0;
 }
 
+void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer,
+               uint8_t *diskName, uint8_t errorCode){
+  fseek(disk, offset, SEEK_SET);
+  if(fread(blockBuffer, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
+    error(3, "cannot read partition table from disk image '%s'", diskName);
+  }
+}
+
 /*----------------------------------------------------------------------------*/
 
 int main(int argc, char *argv[]){
@@ -120,17 +128,17 @@ int main(int argc, char *argv[]){
     error(9, "cannot read block %lu (0x%lX)",
           (unsigned long)blockBuffer, (unsigned long)blockBuffer);
   }
-  numInodes = get4Byte(blockBuffer + 8);
+  numInodes  = get4Byte(blockBuffer + 8);
   freeBlocks = get4Byte(blockBuffer + 12);
   freeInodes = get4Byte(blockBuffer + 16);
+  numInodes  = get4Byte(blockBuffer + 20);
   printf("Used inodes %lu (0x%lX) free blocks %lu (0x%lX) free inodes %lu (0x%lX)\n",
          (unsigned long)numInodes, (unsigned long)numInodes,
          (unsigned long)freeBlocks, (unsigned long)freeBlocks,
          (unsigned long)freeInodes, (unsigned long)freeInodes);
   
   /* skip free inodes and blocks */
-  numInodes = get4Byte(blockBuffer + 20);
-  fseek(disk, numInodes * BLOCK_SIZE, SEEK_CUR);
+  fseek(disk, 512, SEEK_CUR);
   if(fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
     error(9, "cannot read block %lu (0x%lX)",
           (unsigned long)blockBuffer, (unsigned long)blockBuffer);
