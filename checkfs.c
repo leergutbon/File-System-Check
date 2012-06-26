@@ -8,17 +8,8 @@
 #define SECTOR_SIZE 512
 #define BLOCK_SIZE  4096
 #define DESCR_SIZE  20
-#define NPE         (SECTOR_SIZE / sizeof(PartEntry))
+#define SPB         (BLOCK_SIZE / SECTOR_SIZE)
 
-
-typedef struct {
-  uint32_t type;
-  uint32_t start;
-  uint32_t size;
-  uint8_t descr[DESCR_SIZE];
-} PartEntry;
-
-PartEntry ptr[NPE];
 
 /*----------------------------------------------------------------------------*/
 
@@ -34,54 +25,50 @@ void error(int errorCode, char *fmt, ...) {
   exit(errorCode);
 }
 
-unsigned long getNumber(uint8_t *p) {
-  return (uint32_t) *(p + 0) << 24 |
-         (uint32_t) *(p + 1) << 16 |
-         (uint32_t) *(p + 2) <<  8 |
-         (uint32_t) *(p + 3) <<  0;
-}
-
-void convertPartitionTable(PartEntry *e, uint32_t n) {
-  uint32_t i;
-  uint8_t *p;
-
-  for (i = 0; i < n; i++) {
-    p = (uint8_t *) &e[i];
-    e[i].type  = getNumber(p + 0);
-    e[i].start = getNumber(p + 4);
-    e[i].size  = getNumber(p + 8);
-  }
+unsigned long get4Byte(unsigned char *addr) {
+  return (unsigned long) addr[0] << 24 |
+         (unsigned long) addr[1] << 16 |
+         (unsigned long) addr[2] <<  8 |
+         (unsigned long) addr[3] <<  0;
 }
 
 /*----------------------------------------------------------------------------*/
 
 int main(int argc, char *argv[]){
+  /* disk */
   FILE *disk;
   uint8_t *diskName;
-  uint8_t ptrNumber;
-  uint8_t ptrTable[SECTOR_SIZE];
+  uint8_t  ptrNumber;
   uint32_t diskSize;
   uint32_t numSectors;
+  /* partition */
+  uint8_t  ptrTable[SECTOR_SIZE];
+  uint8_t  *ptrEntry;
+  uint32_t ptrType;
+  uint32_t ptrStart;
   uint32_t ptrSize;
-  uint32_t ptrSectors;
-
-  /* only for print partition table */
-  /*uint32_t partLast;
-  uint8_t i, j, c;*/
+  uint32_t currentBlock;
+  uint8_t  blockBuffer[BLOCK_SIZE];
+  uint32_t numInodes;
+  uint32_t freeInodes;
+  uint32_t freeBlocks;
 
   if (argc != 3) {
     error(1, "Wrong number of arguments.\nUsage: fsc <disk-image>\n");
   }
 
-  /* open disk image, only read and binary */
+  /* open disk image, only read and binary mode */
   diskName = (uint8_t *) argv[1];
   ptrNumber = (uint8_t) atoi(argv[2]);
+  if(ptrNumber < 0 || ptrNumber > 15){
+    error(4, "Illegal partition number %d", ptrNumber);
+  }
   disk = fopen((char *)diskName, "rb");
   if(disk == NULL){
     error(2, "cannot open disk image file '%s'", argv[1]);
   }
   
-  /* read image size */
+  /* read disk size */
   fseek(disk, 0, SEEK_END);
   diskSize = ftell(disk);
   numSectors = diskSize / SECTOR_SIZE;
@@ -99,62 +86,60 @@ int main(int argc, char *argv[]){
   if(fread(ptrTable, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
     error(3, "cannot read partition table from disk image '%s'", diskName);
   }
-  fclose(disk);
-
-  /*convertPartitionTable(ptr, NPE);*/
-  /* print partition table */
-  /*printf("Partitions:\n");
-  printf(" # b type       start      last       size       description\n");
-  for (i = 0; i < NPE; i++) {
-    if (ptr[i].type != 0) {
-      partLast = ptr[i].start + ptr[i].size - 1;
-    } else {
-      partLast = 0;
-    }
-    printf("%2d %s 0x%08lX 0x%08lX 0x%08lX 0x%08lX ",
-           i,
-           (unsigned long)ptr[i].type & 0x80000000 ? "*" : " ",
-           (unsigned long)ptr[i].type & 0x7FFFFFFF,
-           (unsigned long)ptr[i].start,
-           (unsigned long)partLast,
-           (unsigned long)ptr[i].size);
-    for (j = 0; j < DESCR_SIZE; j++) {
-      c = ptr[i].descr[j];
-      if (c == '\0') {
-        break;
-      }
-      if (c >= 0x20 && c < 0x7F) {
-        printf("%c", c);
-      } else {
-        printf(".");
-      }
-    }
-    printf("\n");
-  }*/
-
-
   
-  /* read partition */
-  if(ptrNumber >= 0 && ptrNumber <= 15){
-    if(ptr[ptrNumber].type != 0 ){
-      /* checks partion for EOS32 partition type 
-       * 88 is decimal, EOS32 have 0x00000058 as partition type
-       * 88 == 0x58 */
-      if(((unsigned long)ptr[ptrNumber].type & 0x7FFFFFFF) == 89){
-        error(5, "Partion %2d is a EOS32 swap partition, can't check this type.", ptrNumber);
-      }else if(((unsigned long)ptr[ptrNumber].type & 0x7FFFFFFF) == 88){
-        /* check partion */
-        printf("Check partition %2d.\n", ptrNumber);
-      }else{
-        error(5, "Partition %2d unknown type.", ptrNumber);
-      }
-    }else{
-      error(5, "Partition %d doesn't exist.", ptrNumber);
-    }
-  }else{
-    error(4, "Illegal partition number %d", ptrNumber);
+  /* check partition entry */
+  ptrEntry = ptrTable + ptrNumber * 32;
+  ptrType = get4Byte(ptrEntry + 0);
+  if ((ptrType & 0x7FFFFFFF) != 0x00000058) {
+    error(5, "Partition %d of disk '%s' does not contain an EOS32 file system",
+          ptrNumber, diskName);
   }
   
+  /* set partition start, end and print partition size */
+  ptrStart = get4Byte(ptrEntry + 4);
+  ptrSize = get4Byte(ptrEntry + 8);
+  printf("File system has size %lu (0x%lX) sectors of %d bytes each,\n",
+         (unsigned long)ptrSize, (unsigned long)ptrSize, SECTOR_SIZE);
+  if (ptrSize % SPB != 0) {
+    printf("File system size is not a multiple of block size.\n");
+  }
+  currentBlock = ptrSize / SPB;
+  printf("and %lu (0x%lX) blocks of %d bytes each.\n",
+         (unsigned long)currentBlock, (unsigned long)currentBlock, BLOCK_SIZE);
+  if (currentBlock < 2) {
+    error(9, "file system has less than 2 blocks");
+  }
+
+  /* partition start and size */
+  printf("Partition start: %lu (0x%lX)\tsize: %lu (0x%lX).\n",
+         (unsigned long)ptrStart, (unsigned long)ptrStart,
+         (unsigned long)ptrSize, (unsigned long)ptrSize);
+  /* super block */
+  fseek(disk, ptrStart * SECTOR_SIZE + 1 * BLOCK_SIZE, SEEK_SET);
+  if (fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
+    error(9, "cannot read block %lu (0x%lX)",
+          (unsigned long)blockBuffer, (unsigned long)blockBuffer);
+  }
+  numInodes = get4Byte(blockBuffer + 8);
+  freeBlocks = get4Byte(blockBuffer + 12);
+  freeInodes = get4Byte(blockBuffer + 16);
+  printf("Used inodes %lu (0x%lX) free blocks %lu (0x%lX) free inodes %lu (0x%lX)\n",
+         (unsigned long)numInodes, (unsigned long)numInodes,
+         (unsigned long)freeBlocks, (unsigned long)freeBlocks,
+         (unsigned long)freeInodes, (unsigned long)freeInodes);
+  
+  /* skip free inodes and blocks */
+  numInodes = get4Byte(blockBuffer + 20);
+  fseek(disk, numInodes * BLOCK_SIZE, SEEK_CUR);
+  if(fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
+    error(9, "cannot read block %lu (0x%lX)",
+          (unsigned long)blockBuffer, (unsigned long)blockBuffer);
+  }
+  numInodes = get4Byte(blockBuffer + 0);
+  printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
+  
+  
+  fclose(disk);
   return 0;
 }
 
