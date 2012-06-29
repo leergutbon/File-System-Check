@@ -122,7 +122,8 @@ int main(int argc, char *argv[]){
   printf("Partition start: %lu (0x%lX)\tsize: %lu (0x%lX).\n",
          (unsigned long)ptrStart, (unsigned long)ptrStart,
          (unsigned long)ptrSize, (unsigned long)ptrSize);
-  /* super block */
+  /* set pointer to super block 
+   * block number 1 == super block */
   fseek(disk, ptrStart * SECTOR_SIZE + 1 * BLOCK_SIZE, SEEK_SET);
   if (fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
     error(9, "cannot read block %lu (0x%lX)",
@@ -131,19 +132,19 @@ int main(int argc, char *argv[]){
   numInodes  = get4Byte(blockBuffer + 8);
   freeBlocks = get4Byte(blockBuffer + 12);
   freeInodes = get4Byte(blockBuffer + 16);
-  numInodes  = get4Byte(blockBuffer + 20);
-  printf("Used inodes %lu (0x%lX) free blocks %lu (0x%lX) free inodes %lu (0x%lX)\n",
+  printf("Inode list size %lu (0x%lX) free blocks %lu (0x%lX) free inodes %lu (0x%lX)\n",
          (unsigned long)numInodes, (unsigned long)numInodes,
          (unsigned long)freeBlocks, (unsigned long)freeBlocks,
          (unsigned long)freeInodes, (unsigned long)freeInodes);
   
-  /* skip free inodes and blocks */
-  fseek(disk, 512, SEEK_CUR);
+  /* set pointer to inode-tablle
+   * block number 2 == inode tabelle */
+  fseek(disk, ptrStart * SECTOR_SIZE + 2 * BLOCK_SIZE, SEEK_SET);
   if(fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
     error(9, "cannot read block %lu (0x%lX)",
           (unsigned long)blockBuffer, (unsigned long)blockBuffer);
   }
-  numInodes = get4Byte(blockBuffer + 0);
+  numInodes = get4Byte(blockBuffer + 20);
   printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
   
   
