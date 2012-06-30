@@ -13,6 +13,26 @@
 #define INOPB 64 /* inodes per block BLOCK_SIZE / INOSI */
 #define INOSI 64 /* size of one inode */
 
+/* file info */
+#define IFMT		  070000	/* type of file */
+#define IFREG		  040000	/* regular file */
+#define IFDIR		  030000	/* directory */
+#define IFCHR		  020000	/* character special */
+#define IFBLK		  010000	/* block special */
+#define IFFREE	  000000	/* reserved (indicates free inode) */
+#define ISUID		  004000	/* set user id on execution */
+#define ISGID		  002000	/* set group id on execution */
+#define ISVTX		  001000	/* save swapped text even after use */
+#define UREAD     000400	/* user's read permission */
+#define UWRITE		000200	/* user's write permission */
+#define UEXEC     000100	/* user's execute permission */
+#define GREAD     000040	/* group's read permission */
+#define GRWRITE		000020	/* group's write permission */
+#define GREXEC		000010	/* group's execute permission */
+#define OTREAD		000004	/* other's read permission */
+#define OTWRITE		000002	/* other's write permission */
+#define OTEXEC		000001	/* other's execute permission */
+
 
 /*--- error function ---------------------------------------------------------*/
 void error(int errorCode, char *fmt, ...) {
@@ -54,7 +74,7 @@ void readInodes(FILE *disk, uint32_t ptrStart, uint8_t *blockBuffer){
   
   /* set pointer to inode-tablle
    * block number 2 == inode tabelle */
-  readBlock(disk, ptrStart * SECTOR_SIZE + 2 * BLOCK_SIZE, blockBuffer);
+  readBlock(disk, ptrStart * SECTOR_SIZE + 1 * BLOCK_SIZE, blockBuffer);
   /*--- test output ----------------------------------------------------------*/
   numInodes = get4Byte(blockBuffer);
   printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
@@ -155,7 +175,7 @@ int main(int argc, char *argv[]){
   numInodes  = get4Byte(blockBuffer + 8);
   freeBlocks = get4Byte(blockBuffer + 12);
   freeInodes = get4Byte(blockBuffer + 16);
-  printf("Inode list size %lu (0x%lX) free blocks %lu (0x%lX) free inodes %lu (0x%lX)\n",
+  printf("Inode list size %lu (0x%lX) blocks\nfree blocks %lu (0x%lX)\nfree inodes %lu (0x%lX)\n",
          (unsigned long)numInodes, (unsigned long)numInodes,
          (unsigned long)freeBlocks, (unsigned long)freeBlocks,
          (unsigned long)freeInodes, (unsigned long)freeInodes);
