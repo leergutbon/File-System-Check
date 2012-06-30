@@ -10,10 +10,11 @@
 #define DESCR_SIZE  20
 #define SPB         (BLOCK_SIZE / SECTOR_SIZE)
 
+#define INOPB 64 /* inodes per block BLOCK_SIZE / INOSI */
+#define INOSI 64 /* size of one inode */
 
-/*----------------------------------------------------------------------------*/
 
-/* error function */
+/*--- error function ---------------------------------------------------------*/
 void error(int errorCode, char *fmt, ...) {
   va_list ap;
 
@@ -25,6 +26,9 @@ void error(int errorCode, char *fmt, ...) {
   exit(errorCode);
 }
 
+
+/*--- get4Byte -----------------------------------------------------------------
+ * returns 4 bytes of disk buffer */
 unsigned long get4Byte(unsigned char *addr) {
   return (unsigned long) addr[0] << 24 |
          (unsigned long) addr[1] << 16 |
@@ -32,16 +36,35 @@ unsigned long get4Byte(unsigned char *addr) {
          (unsigned long) addr[3] <<  0;
 }
 
-void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer,
-               uint8_t *diskName, uint8_t errorCode){
+
+/*--- readblock-----------------------------------------------------------------
+ * sets pointer of buffer to x */
+void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer){
   fseek(disk, offset, SEEK_SET);
   if(fread(blockBuffer, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
-    error(3, "cannot read partition table from disk image '%s'", diskName);
+    error(3, "I/O error");
   }
 }
 
-/*----------------------------------------------------------------------------*/
 
+/*--- readInodes ---------------------------------------------------------------
+ * reads inodes from inode tabelle */
+void readInodes(FILE *disk, uint32_t ptrStart, uint8_t *blockBuffer){
+  uint32_t numInodes;
+  
+  /* set pointer to inode-tablle
+   * block number 2 == inode tabelle */
+  readBlock(disk, ptrStart * SECTOR_SIZE + 2 * BLOCK_SIZE, blockBuffer);
+  /*--- test output ----------------------------------------------------------*/
+  numInodes = get4Byte(blockBuffer);
+  printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
+  /*--------------------------------------------------------------------------*/
+  numInodes = get4Byte(blockBuffer + 20);
+  printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
+}
+
+
+/*--- main -------------------------------------------------------------------*/
 int main(int argc, char *argv[]){
   /* disk */
   FILE *disk;
@@ -119,7 +142,7 @@ int main(int argc, char *argv[]){
   }
 
   /* partition start and size */
-  printf("Partition start: %lu (0x%lX)\tsize: %lu (0x%lX).\n",
+  printf("Partition start: %lu (0x%lX) size: %lu (0x%lX).\n",
          (unsigned long)ptrStart, (unsigned long)ptrStart,
          (unsigned long)ptrSize, (unsigned long)ptrSize);
   /* set pointer to super block 
@@ -137,16 +160,8 @@ int main(int argc, char *argv[]){
          (unsigned long)freeBlocks, (unsigned long)freeBlocks,
          (unsigned long)freeInodes, (unsigned long)freeInodes);
   
-  /* set pointer to inode-tablle
-   * block number 2 == inode tabelle */
-  fseek(disk, ptrStart * SECTOR_SIZE + 2 * BLOCK_SIZE, SEEK_SET);
-  if(fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
-    error(9, "cannot read block %lu (0x%lX)",
-          (unsigned long)blockBuffer, (unsigned long)blockBuffer);
-  }
-  numInodes = get4Byte(blockBuffer + 20);
-  printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
-  
+  /* read inode tablle and interpretation */
+  readInodes(disk, ptrStart, blockBuffer);
   
   fclose(disk);
   return 0;
