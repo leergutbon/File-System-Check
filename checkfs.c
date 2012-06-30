@@ -12,26 +12,8 @@
 
 #define INOPB 64 /* inodes per block BLOCK_SIZE / INOSI */
 #define INOSI 64 /* size of one inode */
-
-/* file info */
-#define IFMT		  070000	/* type of file */
-#define IFREG		  040000	/* regular file */
-#define IFDIR		  030000	/* directory */
-#define IFCHR		  020000	/* character special */
-#define IFBLK		  010000	/* block special */
-#define IFFREE	  000000	/* reserved (indicates free inode) */
-#define ISUID		  004000	/* set user id on execution */
-#define ISGID		  002000	/* set group id on execution */
-#define ISVTX		  001000	/* save swapped text even after use */
-#define UREAD     000400	/* user's read permission */
-#define UWRITE		000200	/* user's write permission */
-#define UEXEC     000100	/* user's execute permission */
-#define GREAD     000040	/* group's read permission */
-#define GRWRITE		000020	/* group's write permission */
-#define GREXEC		000010	/* group's execute permission */
-#define OTREAD		000004	/* other's read permission */
-#define OTWRITE		000002	/* other's write permission */
-#define OTEXEC		000001	/* other's execute permission */
+/* TODO: INORE is 8, because of single and double indirect */
+#define INORE  6 /* number of block refs in inode */
 
 
 /*--- error function ---------------------------------------------------------*/
@@ -69,18 +51,77 @@ void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer){
 
 /*--- readInodes ---------------------------------------------------------------
  * reads inodes from inode tabelle */
-void readInodes(FILE *disk, uint32_t ptrStart, uint8_t *blockBuffer){
-  uint32_t numInodes;
+void readInodes(FILE *disk, uint32_t ptrStart,
+                uint32_t sizeInodeBlock, uint8_t *blockBuffer){
+  /*uint32_t testOutput;*/
+  uint8_t curBlock;
+  /* first dimension block number, second dimension file or free list counter 
+   *   
+   * cnt*/
+  /* WICHTIG: array größe muss dynamisch sein */
+  uint8_t cnt[30][2];  
+  uint32_t numBlock;
+  int i, j, z, offset;
+
+  for(i=0; i<30; i++){
+    cnt[i][0] = 0;
+    cnt[i][1] = 0;
+  }
   
   /* set pointer to inode-tablle
    * block number 2 == inode tabelle */
-  readBlock(disk, ptrStart * SECTOR_SIZE + 1 * BLOCK_SIZE, blockBuffer);
+  curBlock = 2;
+  for(i=0; i<sizeInodeBlock; i++){
+    readBlock(disk, ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+    offset = 32;
+    for(j=0; j<INOPB; j++){
+      for(z=0; z<INORE; z++){
+        numBlock = get4Byte(blockBuffer + offset);
+        if(numBlock < 26 && numBlock > 1){
+          cnt[numBlock][0] += 1;
+          printf("%d\t%d\n", (int)curBlock, (int)numBlock);
+        }
+        /* last addr no need to count 4 */
+        if(z != INORE-1) offset += 4;
+      }
+      /*numBlock = get4Byte(blockBuffer + offset);
+      if(numBlock < 26 && numBlock > 1){
+        cnt[numBlock][0] += 1;
+        printf("%d\t%d\n", (int)curBlock, (int)numBlock);
+      }
+      offset += 4;
+      numBlock = get4Byte(blockBuffer + offset);
+      if(numBlock < 26 && numBlock > 1){
+        cnt[numBlock][0] += 1;
+        printf("%d\t%d\n", (int)curBlock, (int)numBlock);
+      }
+      offset += 4;
+      numBlock = get4Byte(blockBuffer + offset);
+      if(numBlock < 26 && numBlock > 1){
+        cnt[numBlock][0] += 1;
+        printf("%d\t%d\n", (int)curBlock, (int)numBlock);
+      }*/
+      offset += 40;
+    }
+    
+    /* next block */
+    curBlock++;
+  }
+  
+  /*readBlock(disk, ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+  offset = 32+64;
+  numBlock = get4Byte(blockBuffer + offset);
+  printf("%d\n", (int)numBlock);*/
+  
+  for(i=0; i<30; i++){
+    printf("%3d:\t%d\t%d\n", i, (int)cnt[i][0], (int)cnt[i][1]);
+  }
+  
   /*--- test output ----------------------------------------------------------*/
-  numInodes = get4Byte(blockBuffer);
-  printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
-  /*--------------------------------------------------------------------------*/
-  numInodes = get4Byte(blockBuffer + 20);
-  printf("%lu (0x%lX)\n", (unsigned long)numInodes, (unsigned long)numInodes);
+  /*testOutput = get4Byte(blockBuffer);
+  printf("%lu (0x%lX)\n", (unsigned long)testOutput, (unsigned long)testOutput);
+  testOutput = get4Byte(blockBuffer + 64);
+  printf("%lu (0x%lX)\n", (unsigned long)testOutput, (unsigned long)testOutput);*/
 }
 
 
@@ -100,7 +141,7 @@ int main(int argc, char *argv[]){
   uint32_t ptrSize;
   uint32_t currentBlock;
   uint8_t  blockBuffer[BLOCK_SIZE];
-  uint32_t numInodes;
+  uint32_t sizeInodeBlock;
   uint32_t freeInodes;
   uint32_t freeBlocks;
 
@@ -172,16 +213,16 @@ int main(int argc, char *argv[]){
     error(9, "cannot read block %lu (0x%lX)",
           (unsigned long)blockBuffer, (unsigned long)blockBuffer);
   }
-  numInodes  = get4Byte(blockBuffer + 8);
+  sizeInodeBlock  = get4Byte(blockBuffer + 8);
   freeBlocks = get4Byte(blockBuffer + 12);
   freeInodes = get4Byte(blockBuffer + 16);
   printf("Inode list size %lu (0x%lX) blocks\nfree blocks %lu (0x%lX)\nfree inodes %lu (0x%lX)\n",
-         (unsigned long)numInodes, (unsigned long)numInodes,
+         (unsigned long)sizeInodeBlock, (unsigned long)sizeInodeBlock,
          (unsigned long)freeBlocks, (unsigned long)freeBlocks,
          (unsigned long)freeInodes, (unsigned long)freeInodes);
   
   /* read inode tablle and interpretation */
-  readInodes(disk, ptrStart, blockBuffer);
+  readInodes(disk, ptrStart, sizeInodeBlock, blockBuffer);
   
   fclose(disk);
   return 0;
