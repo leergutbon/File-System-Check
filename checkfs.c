@@ -11,10 +11,20 @@
 #define SPB         (BLOCK_SIZE / SECTOR_SIZE)
 
 #define INOPB 64 /* inodes per block BLOCK_SIZE / INOSI */
-#define INOSI 64 /* size of one inode */
+/*#define INOSI 64*/ /* size of one inode */
 /* TODO: INORE is 8, because of single and double indirect */
-#define INORE  6 /* number of block refs in inode */
+#define INORE  6 /* ref elements of inode */
 
+#define IFMT		  070000	/* type of file */
+#define IFREG		  040000	/* regular file */
+#define IFDIR		  030000	/* directory */
+
+
+/* cnt for refs from inodes */
+typedef struct blockCnt{
+  int file;
+  int freelist;
+}BlockCnt;
 
 /*--- error function ---------------------------------------------------------*/
 void error(int errorCode, char *fmt, ...) {
@@ -43,7 +53,7 @@ unsigned long get4Byte(unsigned char *addr) {
  * sets pointer of buffer to x */
 void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer){
   fseek(disk, offset, SEEK_SET);
-  if(fread(blockBuffer, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
+  if(fread(blockBuffer, 1, BLOCK_SIZE, disk) != BLOCK_SIZE){
     error(3, "I/O error");
   }
 }
@@ -51,56 +61,38 @@ void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer){
 
 /*--- readInodes ---------------------------------------------------------------
  * reads inodes from inode tabelle */
-void readInodes(FILE *disk, uint32_t ptrStart,
-                uint32_t sizeInodeBlock, uint8_t *blockBuffer){
-  /*uint32_t testOutput;*/
-  uint8_t curBlock;
-  /* first dimension block number, second dimension file or free list counter 
-   *   
-   * cnt*/
-  /* WICHTIG: array größe muss dynamisch sein */
-  uint8_t cnt[30][2];  
-  uint32_t numBlock;
-  int i, j, z, offset;
+void readInodes(FILE *disk, uint32_t ptrStart, uint32_t numBlocks,
+                uint32_t numInodeBlocks, uint8_t *blockBuffer){
+  /* see description BlockCnt */
+  BlockCnt *blocks;
+  int i, j, z, offset, curBlock;
+  uint32_t val4Byte;
 
-  for(i=0; i<30; i++){
-    cnt[i][0] = 0;
-    cnt[i][1] = 0;
-  }
-  
+  /* cnt for ref in inode and free list */
+  blocks = malloc(sizeof(BlockCnt) * numBlocks);
+  if(blocks == NULL) error(6, "Out of memory.");
+
   /* set pointer to inode-tablle
-   * block number 2 == inode tabelle */
+   * block number 2 begining of inode tabelle */
   curBlock = 2;
-  for(i=0; i<sizeInodeBlock; i++){
+  for(i=0; i<1; i++){/*numInodeBlocks; i++){*/
     readBlock(disk, ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
     offset = 32;
+    /* go through all inodes in block */
     for(j=0; j<INOPB; j++){
+      /* go through all block refs in inode */
       for(z=0; z<INORE; z++){
-        numBlock = get4Byte(blockBuffer + offset);
-        if(numBlock < 26 && numBlock > 1){
-          cnt[numBlock][0] += 1;
-          printf("%d\t%d\n", (int)curBlock, (int)numBlock);
+        val4Byte = get4Byte(blockBuffer + offset);
+        printf("%d %d %d ", curBlock, j, z);
+        printf("%lu\t%d\n", (unsigned long)val4Byte, offset);
+        if(val4Byte > 0 && val4Byte < numBlocks){
+          blocks[val4Byte].file += 1;
+          /*if(val4Byte == 156) printf("%d %d\n", curBlock, z);*/
         }
         /* last addr no need to count 4 */
-        if(z != INORE-1) offset += 4;
+        /*if(z != INORE-1)*/ offset += 4;
       }
-      /*numBlock = get4Byte(blockBuffer + offset);
-      if(numBlock < 26 && numBlock > 1){
-        cnt[numBlock][0] += 1;
-        printf("%d\t%d\n", (int)curBlock, (int)numBlock);
-      }
-      offset += 4;
-      numBlock = get4Byte(blockBuffer + offset);
-      if(numBlock < 26 && numBlock > 1){
-        cnt[numBlock][0] += 1;
-        printf("%d\t%d\n", (int)curBlock, (int)numBlock);
-      }
-      offset += 4;
-      numBlock = get4Byte(blockBuffer + offset);
-      if(numBlock < 26 && numBlock > 1){
-        cnt[numBlock][0] += 1;
-        printf("%d\t%d\n", (int)curBlock, (int)numBlock);
-      }*/
+
       offset += 40;
     }
     
@@ -113,15 +105,11 @@ void readInodes(FILE *disk, uint32_t ptrStart,
   numBlock = get4Byte(blockBuffer + offset);
   printf("%d\n", (int)numBlock);*/
   
-  for(i=0; i<30; i++){
-    printf("%3d:\t%d\t%d\n", i, (int)cnt[i][0], (int)cnt[i][1]);
-  }
-  
-  /*--- test output ----------------------------------------------------------*/
-  /*testOutput = get4Byte(blockBuffer);
-  printf("%lu (0x%lX)\n", (unsigned long)testOutput, (unsigned long)testOutput);
-  testOutput = get4Byte(blockBuffer + 64);
-  printf("%lu (0x%lX)\n", (unsigned long)testOutput, (unsigned long)testOutput);*/
+  /*for(i=2; i<numInodes; i++){
+    if(blocks[i].file > 1){
+      printf("%d %d\n", i, blocks[i].file);
+    }
+  }*/
 }
 
 
@@ -139,9 +127,9 @@ int main(int argc, char *argv[]){
   uint32_t ptrType;
   uint32_t ptrStart;
   uint32_t ptrSize;
-  uint32_t currentBlock;
+  uint32_t numBlocks;
   uint8_t  blockBuffer[BLOCK_SIZE];
-  uint32_t sizeInodeBlock;
+  uint32_t numInodeBlocks;
   uint32_t freeInodes;
   uint32_t freeBlocks;
 
@@ -195,10 +183,10 @@ int main(int argc, char *argv[]){
   if (ptrSize % SPB != 0) {
     printf("File system size is not a multiple of block size.\n");
   }
-  currentBlock = ptrSize / SPB;
+  numBlocks = ptrSize / SPB;
   printf("and %lu (0x%lX) blocks of %d bytes each.\n",
-         (unsigned long)currentBlock, (unsigned long)currentBlock, BLOCK_SIZE);
-  if (currentBlock < 2) {
+         (unsigned long)numBlocks, (unsigned long)numBlocks, BLOCK_SIZE);
+  if (numBlocks < 2) {
     error(9, "file system has less than 2 blocks");
   }
 
@@ -213,16 +201,16 @@ int main(int argc, char *argv[]){
     error(9, "cannot read block %lu (0x%lX)",
           (unsigned long)blockBuffer, (unsigned long)blockBuffer);
   }
-  sizeInodeBlock  = get4Byte(blockBuffer + 8);
+  numInodeBlocks = get4Byte(blockBuffer + 8);
   freeBlocks = get4Byte(blockBuffer + 12);
   freeInodes = get4Byte(blockBuffer + 16);
-  printf("Inode list size %lu (0x%lX) blocks\nfree blocks %lu (0x%lX)\nfree inodes %lu (0x%lX)\n",
-         (unsigned long)sizeInodeBlock, (unsigned long)sizeInodeBlock,
+  printf("Inode list size %lu (0x%lX) blocks\nFree blocks %lu (0x%lX)\nFree inodes %lu (0x%lX)\n",
+         (unsigned long)numInodeBlocks, (unsigned long)numInodeBlocks,
          (unsigned long)freeBlocks, (unsigned long)freeBlocks,
          (unsigned long)freeInodes, (unsigned long)freeInodes);
   
   /* read inode tablle and interpretation */
-  readInodes(disk, ptrStart, sizeInodeBlock, blockBuffer);
+  readInodes(disk, ptrStart, numBlocks, numInodeBlocks, blockBuffer);
   
   fclose(disk);
   return 0;
