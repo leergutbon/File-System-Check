@@ -127,7 +127,6 @@ void readInodes(uint32_t numBlocks,
           }
         }else if(z >= INORE-2 && z < INORE && val4Byte != 0){ /* indirect refs */
           /* go to indirect block */
-          /*printf("%lu\n", (unsigned long)val4Byte);*/
           readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
           readIndirect(z, blocks, val4Byte, numBlocks, blockBuffer);
           /* go back to inode block */
