@@ -96,6 +96,13 @@ void readIndirect(int numRef,
 }
 
 
+/*--- readLinkBlock ------------------------------------------------------------
+ * reads link blocks of free list */
+ void readLinkBlock(){
+   
+ }
+ 
+ 
 /*--- readInodes ---------------------------------------------------------------
  * reads inodes from inode tabelle */
 void readInodes(uint32_t numBlocks,
@@ -157,8 +164,8 @@ void readInodes(uint32_t numBlocks,
     offset += 4;
   }
   
-  for(i=26; i<numInodeBlocks; i++){
-    if(blocks[i].file > 1 || blocks[i].file == 0){
+  for(i=numInodeBlocks+2; i<numBlocks; i++){
+    if(blocks[i].file == 0 && blocks[i].freelist == 0){
       printf("file: %d %d\n", i, blocks[i].file);
     }
   }
