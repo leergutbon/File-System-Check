@@ -11,13 +11,15 @@
 #define SPB         (BLOCK_SIZE / SECTOR_SIZE)
 
 #define INOPB 64 /* inodes per block BLOCK_SIZE / INOSI */
-/*#define INOSI 64*/ /* size of one inode */
-/* TODO: INORE is 8, because of single and double indirect */
-#define INORE  6 /* ref elements of inode */
+#define INORE  8 /* ref elements of inode */
 
 #define IFMT		  070000	/* type of file */
 #define IFREG		  040000	/* regular file */
 #define IFDIR		  030000	/* directory */
+
+
+FILE *disk;
+uint32_t ptrStart;
 
 
 /* cnt for refs from inodes */
@@ -25,6 +27,7 @@ typedef struct blockCnt{
   int file;
   int freelist;
 }BlockCnt;
+
 
 /*--- error function ---------------------------------------------------------*/
 void error(int errorCode, char *fmt, ...) {
@@ -51,7 +54,7 @@ unsigned long get4Byte(unsigned char *addr) {
 
 /*--- readblock-----------------------------------------------------------------
  * sets pointer of buffer to x */
-void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer){
+void readBlock(uint32_t offset, uint8_t *blockBuffer){
   fseek(disk, offset, SEEK_SET);
   if(fread(blockBuffer, 1, BLOCK_SIZE, disk) != BLOCK_SIZE){
     error(3, "I/O error");
@@ -59,10 +62,45 @@ void readBlock(FILE *disk, uint32_t offset, uint8_t *blockBuffer){
 }
 
 
+/*--- readIndirect -------------------------------------------------------------
+ * read the two indirect blocks */
+void readIndirect(int numRef,
+                  BlockCnt *blocks,
+                  uint32_t curBlock,
+                  uint32_t numBlocks,
+                  uint8_t * blockBuffer){
+  int cnt, offset;
+  uint32_t val4Byte;
+  
+  offset = 0;
+  /* second to last single indirect and last double indirect */
+  if(numRef == INORE-2){
+    /* 4 byte for every entry in indirect block */
+    for(cnt=0; cnt < BLOCK_SIZE/sizeof(uint32_t); cnt++){
+      val4Byte = get4Byte(blockBuffer + offset);
+      if(val4Byte > 0 && val4Byte < numBlocks){
+        blocks[val4Byte].file += 1;
+      }
+      offset += 4;
+    }
+  }else if(numRef == INORE-1){
+    for(cnt=0; cnt < BLOCK_SIZE/sizeof(uint32_t); cnt++){
+      val4Byte = get4Byte(blockBuffer + offset);
+      /* second indirect block */
+      readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
+      readIndirect(numRef-1, blocks, curBlock, numBlocks, blockBuffer);
+      /* first indorect block */
+      readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+    }
+  }
+}
+
+
 /*--- readInodes ---------------------------------------------------------------
  * reads inodes from inode tabelle */
-void readInodes(FILE *disk, uint32_t ptrStart, uint32_t numBlocks,
-                uint32_t numInodeBlocks, uint8_t *blockBuffer){
+void readInodes(uint32_t numBlocks,
+                uint32_t numInodeBlocks,
+                uint8_t *blockBuffer){
   /* see description BlockCnt */
   BlockCnt *blocks;
   int i, j, z, offset, curBlock;
@@ -75,48 +113,53 @@ void readInodes(FILE *disk, uint32_t ptrStart, uint32_t numBlocks,
   /* set pointer to inode-tablle
    * block number 2 begining of inode tabelle */
   curBlock = 2;
-  for(i=0; i<1; i++){/*numInodeBlocks; i++){*/
-    readBlock(disk, ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+  for(i=0; i<numInodeBlocks; i++){
+    readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
     offset = 32;
     /* go through all inodes in block */
     for(j=0; j<INOPB; j++){
       /* go through all block refs in inode */
       for(z=0; z<INORE; z++){
         val4Byte = get4Byte(blockBuffer + offset);
-        printf("%d %d %d ", curBlock, j, z);
-        printf("%lu\t%d\n", (unsigned long)val4Byte, offset);
-        if(val4Byte > 0 && val4Byte < numBlocks){
-          blocks[val4Byte].file += 1;
-          /*if(val4Byte == 156) printf("%d %d\n", curBlock, z);*/
-        }
-        /* last addr no need to count 4 */
-        /*if(z != INORE-1)*/ offset += 4;
+        if(z < INORE-2){ /* direct refs */
+          if(val4Byte > 0 && val4Byte < numBlocks){
+            blocks[val4Byte].file += 1;
+          }
+        }else if(z >= INORE-2 && z < INORE && val4Byte != 0){ /* indirect refs */
+          /* go to indirect block */
+          /*printf("%lu\n", (unsigned long)val4Byte);*/
+          readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
+          readIndirect(z, blocks, val4Byte, numBlocks, blockBuffer);
+          /* go back to inode block */
+          readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+        }          
+        offset += 4;
       }
 
-      offset += 40;
+      offset += 32;
     }
     
     /* next block */
     curBlock++;
   }
   
+  /* check free list */
   /*readBlock(disk, ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
   offset = 32+64;
   numBlock = get4Byte(blockBuffer + offset);
   printf("%d\n", (int)numBlock);*/
   
-  /*for(i=2; i<numInodes; i++){
+  for(i=2; i<numInodeBlocks; i++){
     if(blocks[i].file > 1){
       printf("%d %d\n", i, blocks[i].file);
     }
-  }*/
+  }
 }
 
 
 /*--- main -------------------------------------------------------------------*/
 int main(int argc, char *argv[]){
   /* disk */
-  FILE *disk;
   uint8_t *diskName;
   uint8_t  ptrNumber;
   uint32_t diskSize;
@@ -125,7 +168,6 @@ int main(int argc, char *argv[]){
   uint8_t  ptrTable[SECTOR_SIZE];
   uint8_t  *ptrEntry;
   uint32_t ptrType;
-  uint32_t ptrStart;
   uint32_t ptrSize;
   uint32_t numBlocks;
   uint8_t  blockBuffer[BLOCK_SIZE];
@@ -210,7 +252,7 @@ int main(int argc, char *argv[]){
          (unsigned long)freeInodes, (unsigned long)freeInodes);
   
   /* read inode tablle and interpretation */
-  readInodes(disk, ptrStart, numBlocks, numInodeBlocks, blockBuffer);
+  readInodes(numBlocks, numInodeBlocks, blockBuffer);
   
   fclose(disk);
   return 0;
