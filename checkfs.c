@@ -172,7 +172,16 @@ void readInodes(uint32_t numBlocks,
   
   for(i=numInodeBlocks+2; i<numBlocks; i++){
     if(blocks[i].file == 0 && blocks[i].freelist == 0){
-      printf("block %d: %d %d\n", i, blocks[i].file, blocks[i].freelist);
+      error(10, "Block is not in file and free list.");
+    }
+    if(blocks[i].file == 1 && blocks[i].freelist == 1){
+      error(11, "Block is in file and free list.");
+    }
+    if(blocks[i].freelist > 1){
+      error(12, "Block is more than one in free list.");
+    }
+    if(blocks[i].file > 1){
+      error(13, "Block is more than one in files");
     }
   }
 }
@@ -210,6 +219,7 @@ void readDir(uint8_t *blockBuffer, uint32_t block){
    p += 64;
   }
 }
+
 
 /* reads the content of a specific inode */
 void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
@@ -258,6 +268,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
   disk = diskBackup;
 
 }
+
 
 /* go throug all inodes of the given block and read their link count */
 void goThroughInodes(uint8_t *blockBuffer, uint32_t targetBlock){
