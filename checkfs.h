@@ -46,9 +46,7 @@ void readBlock(uint32_t offset, uint8_t *blockBuffer);
 void readIndirect(int numRef,
                   BlockCnt *blocks,
                   uint32_t curBlock,
-                  uint32_t numBlocks,
                   uint8_t * blockBuffer);
-void readInodes(uint32_t numBlocks,
-                uint32_t numInodeBlocks,
+void readInodes(uint32_t numInodeBlocks,
                 uint8_t *blockBuffer);
 void goThroughInodes(uint8_t *blockBuffer, uint32_t targetBlock);
