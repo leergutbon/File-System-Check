@@ -8,6 +8,7 @@
 #define SECTOR_SIZE 512
 #define BLOCK_SIZE  4096
 #define DESCR_SIZE  20
+#define FRELS_SIZE  500
 #define SPB         (BLOCK_SIZE / SECTOR_SIZE)
 
 #define INOPB 64 /* inodes per block BLOCK_SIZE / INOSI */
@@ -21,13 +22,12 @@
 FILE *disk;
 uint32_t ptrStart;
 
-
 /* cnt for refs from inodes */
 typedef struct blockCnt{
   int file;
   int freelist;
 }BlockCnt;
-
+                   
 
 /*--- error function ---------------------------------------------------------*/
 void error(int errorCode, char *fmt, ...) {
@@ -98,9 +98,40 @@ void readIndirect(int numRef,
 
 /*--- readLinkBlock ------------------------------------------------------------
  * reads link blocks of free list */
- void readLinkBlock(){
-   
- }
+void readLinkBlock(BlockCnt *blocks,
+                   uint8_t *blockBuffer,
+                   int curBlock,
+                   int offset){
+  int i;
+  uint32_t val4Byte;
+  uint32_t sizeFreeList;
+  
+  /* first 4 bytes size of link block */
+  sizeFreeList = get4Byte(blockBuffer + offset);
+  
+  /* first entry of list is link block */
+  offset += 4;
+  val4Byte = get4Byte(blockBuffer + offset);
+  
+  /* first element of free list is link block */
+  if(val4Byte != 0){
+    blocks[val4Byte].freelist += 1;
+    readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
+    readLinkBlock(blocks, blockBuffer, val4Byte, 0);
+    readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+  }
+  
+  offset += 4;
+  /* go through free list */
+  for(i=1; i<sizeFreeList; i++){
+    val4Byte = get4Byte(blockBuffer + offset);
+    /*printf("%lu\n", get4Byte(blockBuffer+offset));*/
+    if(val4Byte != 0){
+      blocks[val4Byte].freelist += 1;
+    }
+    offset += 4;
+  }
+}
  
  
 /*--- readInodes ---------------------------------------------------------------
@@ -112,7 +143,6 @@ void readInodes(uint32_t numBlocks,
   BlockCnt *blocks;
   int i, j, z, offset, curBlock;
   uint32_t val4Byte;
-  uint32_t sizeFreeList;
 
   /* cnt for ref in inode and free list */
   blocks = malloc(sizeof(BlockCnt) * numBlocks);
@@ -134,6 +164,7 @@ void readInodes(uint32_t numBlocks,
             blocks[val4Byte].file += 1;
           }
         }else if(z >= INORE-2 && z < INORE && val4Byte != 0){ /* indirect refs */
+          blocks[val4Byte].file += 1;
           /* go to indirect block */
           readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
           readIndirect(z, blocks, val4Byte, numBlocks, blockBuffer);
@@ -148,25 +179,16 @@ void readInodes(uint32_t numBlocks,
     curBlock++;
   }
   
+  curBlock = 1;
   /* check free list, position in super block */
-  readBlock(ptrStart * SECTOR_SIZE + 1 * BLOCK_SIZE, blockBuffer);
+  readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
   /* start of free block */
-  offset = 24 + get4Byte(blockBuffer+20)*4 + 4;
-  /* size of free list */
-  sizeFreeList = get4Byte(blockBuffer + offset - 4);
-  
-  /* go through free list */
-  for(i=0; i<sizeFreeList; i++){
-    val4Byte = get4Byte(blockBuffer + offset);
-    /*printf("free list: %lu first element: %lu\n",
-             (unsigned long)sizeFreeList, (unsigned long)val4Byte);*/
-    blocks[val4Byte].freelist += 1;
-    offset += 4;
-  }
+  offset = 24 + get4Byte(blockBuffer+20)*4;
+  readLinkBlock(blocks, blockBuffer, curBlock, offset);
   
   for(i=numInodeBlocks+2; i<numBlocks; i++){
     if(blocks[i].file == 0 && blocks[i].freelist == 0){
-      printf("file: %d %d\n", i, blocks[i].file);
+      printf("block %d: %d %d\n", i, blocks[i].file, blocks[i].freelist);
     }
   }
 }
