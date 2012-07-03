@@ -11,6 +11,7 @@ uint32_t *allInodes;
 uint32_t *nlnks;
 FILE *disk;
 uint32_t ptrStart;
+uint32_t numBlocks;
 
 
 /*--- error function ---------------------------------------------------------*/
@@ -51,7 +52,6 @@ void readBlock(uint32_t offset, uint8_t *blockBuffer){
 void readIndirect(int numRef,
                   BlockCnt *blocks,
                   uint32_t curBlock,
-                  uint32_t numBlocks,
                   uint8_t * blockBuffer){
   int cnt, offset;
   uint32_t val4Byte;
@@ -72,7 +72,7 @@ void readIndirect(int numRef,
       val4Byte = get4Byte(blockBuffer + offset);
       /* second indirect block */
       readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
-      readIndirect(numRef-1, blocks, curBlock, numBlocks, blockBuffer);
+      readIndirect(numRef-1, blocks, curBlock, blockBuffer);
       /* first indorect block */
       readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
     }
@@ -111,7 +111,11 @@ void readLinkBlock(BlockCnt *blocks,
     val4Byte = get4Byte(blockBuffer + offset);
     /*printf("%lu\n", get4Byte(blockBuffer+offset));*/
     if(val4Byte != 0){
-      blocks[val4Byte].freelist += 1;
+      if(val4Byte > 0 && val4Byte < numBlocks){
+        blocks[val4Byte].freelist += 1;
+      }else{
+        error(99, "Block is out of range");
+      }
     }
     offset += 4;
   }
@@ -120,8 +124,7 @@ void readLinkBlock(BlockCnt *blocks,
  
 /*--- readInodes ---------------------------------------------------------------
  * reads inodes from inode tabelle */
-void readInodes(uint32_t numBlocks,
-                uint32_t numInodeBlocks,
+void readInodes(uint32_t numInodeBlocks,
                 uint8_t *blockBuffer){
   /* see description BlockCnt */
   BlockCnt *blocks;
@@ -151,7 +154,7 @@ void readInodes(uint32_t numBlocks,
           blocks[val4Byte].file += 1;
           /* go to indirect block */
           readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
-          readIndirect(z, blocks, val4Byte, numBlocks, blockBuffer);
+          readIndirect(z, blocks, val4Byte, blockBuffer);
           /* go back to inode block */
           readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
         }          
@@ -170,6 +173,11 @@ void readInodes(uint32_t numBlocks,
   offset = 24 + get4Byte(blockBuffer+20)*4;
   readLinkBlock(blocks, blockBuffer, curBlock, offset);
   
+  /* prints boot, super block and inode tabelle */
+  /*for(i=0; i<numInodeBlocks+2; i++){
+    printf("%lu %lu\n", (unsigned long)blocks[i].file, (unsigned long)blocks[i].freelist);
+  }*/
+
   for(i=numInodeBlocks+2; i<numBlocks; i++){
     if(blocks[i].file == 0 && blocks[i].freelist == 0){
       error(10, "Block is not in file and free list.");
@@ -293,7 +301,6 @@ int main(int argc, char *argv[]){
   uint8_t  *ptrEntry;
   uint32_t ptrType;
   uint32_t ptrSize;
-  uint32_t numBlocks;
   uint8_t  blockBuffer[BLOCK_SIZE];
   uint32_t numInodeBlocks;
   uint32_t freeInodes;
@@ -377,7 +384,7 @@ int main(int argc, char *argv[]){
          (unsigned long)freeInodes, (unsigned long)freeInodes);
   
   /* read inode tablle and interpretation */
-  readInodes(numBlocks, numInodeBlocks, blockBuffer);
+  readInodes(numInodeBlocks, blockBuffer);
   
   
   /* check the directories */
