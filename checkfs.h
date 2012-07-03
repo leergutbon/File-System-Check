@@ -38,6 +38,11 @@ typedef struct blockCnt{
   int freelist;
 }BlockCnt;
 
+typedef struct inode{
+  uint32_t nlnks;
+  uint32_t size;
+}Inode;
+
 void readDir(uint8_t *blockBuffer, uint32_t block);
 void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber);
 void error(int errorCode, char *fmt, ...);
