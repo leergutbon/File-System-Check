@@ -279,6 +279,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
   uint32_t targetInode;
   int i, offset;
   
+  offset = 0;
   /* increment the linkcount of the given inode by 1 */
   allInodes[inodeNumber].nlnks += 1;
   /* translates the given inode in the exact inode in a block */
