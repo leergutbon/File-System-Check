@@ -41,6 +41,7 @@ typedef struct blockCnt{
 typedef struct inode{
   uint32_t nlnks;
   uint32_t size;
+  uint32_t computedSize;
 }Inode;
 
 void readDir(uint8_t *blockBuffer, uint32_t block);
