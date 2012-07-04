@@ -127,6 +127,7 @@ void readInodes(uint32_t numBlocks,
   BlockCnt *blocks;
   int i, j, z, offset, curBlock;
   uint32_t val4Byte;
+  uint32_t type;
 
   /* cnt for ref in inode and free list */
   blocks = malloc(sizeof(BlockCnt) * numBlocks);
@@ -137,27 +138,36 @@ void readInodes(uint32_t numBlocks,
   curBlock = 2;
   for(i=0; i<numInodeBlocks; i++){
     readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
-    offset = 32;
+    offset = 0;/*32;*/
     /* go through all inodes in block */
     for(j=0; j<INOPB; j++){
-      /* go through all block refs in inode */
-      for(z=0; z<INORE; z++){
-        val4Byte = get4Byte(blockBuffer + offset);
-        if(z < INORE-2){ /* direct refs */
-          if(val4Byte > 0 && val4Byte < numBlocks){
-            blocks[val4Byte].file += 1;
-          }
-        }else if(z >= INORE-2 && z < INORE && val4Byte != 0){ /* indirect refs */
-          blocks[val4Byte].file += 1;
-          /* go to indirect block */
-          readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
-          readIndirect(z, blocks, val4Byte, numBlocks, blockBuffer);
-          /* go back to inode block */
-          readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
-        }          
-        offset += 4;
-      }
+      type = get4Byte(blockBuffer + offset);
       offset += 32;
+      if((type & IFMT) != IFCHR && (type & IFMT) != IFBLK){
+        /* go through all block refs in inode */
+        for(z=0; z<INORE; z++){
+          val4Byte = get4Byte(blockBuffer + offset);
+          if(z < INORE-2){ /* direct refs */
+            if(val4Byte >= 0 && val4Byte < numBlocks){
+              if(val4Byte != 0) blocks[val4Byte].file += 1;
+            }else{
+              error(99, "Block is not in range.");
+            }
+          }else if(z >= INORE-2 && z < INORE){ /* indirect refs */
+            if(val4Byte != 0){
+              blocks[val4Byte].file += 1;
+              /* go to indirect block */
+              readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
+              readIndirect(z, blocks, val4Byte, numBlocks, blockBuffer);
+              /* go back to inode block */
+              readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+            }
+          }
+          offset += 4;
+        }
+      }else{
+        offset += 32;
+      }
     }
     /* next block */
     curBlock++;
@@ -169,6 +179,10 @@ void readInodes(uint32_t numBlocks,
   /* start of free block */
   offset = 24 + get4Byte(blockBuffer+20)*4;
   readLinkBlock(blocks, blockBuffer, curBlock, offset);
+  
+  /*for(i=0; i<numInodeBlocks+2; i++){
+    printf("%lu %lu\n", (unsigned long)blocks[i].file, (unsigned long)blocks[i].freelist);
+  }*/
   
   for(i=numInodeBlocks+2; i<numBlocks; i++){
     if(blocks[i].file == 0 && blocks[i].freelist == 0){
