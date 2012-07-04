@@ -73,7 +73,7 @@ void readIndirect(int numRef,
       /* second indirect block */
       readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
       readIndirect(numRef-1, blocks, curBlock, blockBuffer);
-      /* first indorect block */
+      /* first indirect block */
       readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
     }
   }
@@ -93,10 +93,14 @@ void followIndirect(uint32_t block, uint32_t numBlocks, uint8_t *blockBuffer, ui
         if((type & IFMT) == IFDIR){
           readDir(blockBuffer, val4Byte);
         }
+      }else if(block >= numBlocks){
+        error(99, "Block is out of range");
       }
       offset += 4;
     }
     
+  }else if(block >= numBlocks){
+    error(99, "Block is out of range");
   }
 }
 
@@ -133,7 +137,7 @@ void readLinkBlock(BlockCnt *blocks,
     if(val4Byte != 0){
       if(val4Byte > 0 && val4Byte < numBlocks){
         blocks[val4Byte].freelist += 1;
-      }else{
+      }else if(val4Byte >= numBlocks){
         error(99, "Block is out of range");
       }
     }
@@ -300,7 +304,11 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
           allInodes[inodeNumber].computedSize += BLOCK_SIZE;
           /* Jump to the block which was read in the direct block */
           if((type & IFMT) == IFDIR){
-            readDir(blockBuffer, block);
+            if(block > 0 && block < numBlocks){
+              readDir(blockBuffer, block);
+            }else if(block >= numBlocks){
+              error(99, "Block is not in range");
+            }
           }
           /* restore blockBuffer */
           readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
@@ -311,6 +319,8 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
       block = get4Byte(blockBuffer + 56);
       if(block != 0 && block < numBlocks){
         followIndirect(block, numBlocks, blockBuffer, inodeNumber, type);
+      }else if(block > numBlocks){
+        error(99, "Block is not in range");
       }
       /* restore blockBuffer */
       readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
@@ -328,9 +338,15 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
           readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
           offset += 4;
         }
+      }else if(block > numBlocks){
+        error(99, "Block is not in range");
       }
       /* restore blockBuffer */
       readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
+    }else if((type & IFMT) == IFCHR ||  (type & IFMT) == IFBLK){
+
+    }else{
+      error(18, "illegal type");
     }
 
   }else{
@@ -487,6 +503,9 @@ int main(int argc, char *argv[]){
     if(allInodes[i].size != allInodes[i].computedSize){
       if(!(allInodes[i].size < allInodes[i].computedSize && allInodes[i].size > (allInodes[i].computedSize - BLOCK_SIZE))){
         error(14, "size of this inode is not right");
+      }
+      if(allInodes[i].nlnks == 0 && allInodes[i].computedSize){
+        error(16, "inode with linkcount 0 is not free");
       }
     }
   }
