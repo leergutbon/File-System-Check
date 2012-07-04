@@ -79,16 +79,20 @@ void readIndirect(int numRef,
   }
 }
 
-void followIndirect(uint32_t block, uint32_t numBlocks, uint8_t *blockBuffer){
+void followIndirect(uint32_t block, uint32_t numBlocks, uint8_t *blockBuffer, uint32_t inodeNumber, uint32_t type){
   uint32_t val4Byte;
   int cnt, offset;
   if(block != 0 && block < numBlocks){
     /* set blockBuffer to the target block */
     readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
+    offset = 0;
     for(cnt=0; cnt < BLOCK_SIZE/sizeof(uint32_t); cnt++){
       val4Byte = get4Byte(blockBuffer + offset);
       if(val4Byte > 0 && val4Byte < numBlocks){
-        readDir(blockBuffer, val4Byte);
+        allInodes[inodeNumber].computedSize += BLOCK_SIZE;
+        if((type & IFMT) == IFDIR){
+          readDir(blockBuffer, val4Byte);
+        }
       }
       offset += 4;
     }
@@ -266,21 +270,28 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
   
   /* reads the type of the inode */
   type = get4Byte(blockBuffer);
+  /* check if this is the root directory and if so check if it is a directory */
+  if(inodeNumber == 1 && (type & IFMT) != IFDIR){
+    error(20, "root inode is not a directory");
+  }
   /* reads the size of this inode */
   allInodes[inodeNumber].size = get4Byte(blockBuffer + 28);
   if(type != 0){
     if ((type & IFMT) != IFREG && (type & IFMT) != IFDIR && (type & IFMT) != IFCHR && (type & IFMT) != IFBLK) {
         error(18, "illegal type");
-    } else if ((type & IFMT) == IFDIR) {
-      /* if this inode is a directory loop through all direct
+    } else if ((type & IFMT) == IFDIR || (type & IFMT) == IFREG) {
+      /* if this inode is a directory or reg file loop through all direct
        * blocks of this inode */
       for(i = 32; i <= 52; i += 4){
         block = get4Byte(blockBuffer + i);
         
-        
         if(block != 0){
+          /* increment the computed Size */
+          allInodes[inodeNumber].computedSize += BLOCK_SIZE;
           /* Jump to the block which was read in the direct block */
-          readDir(blockBuffer, block);
+          if((type & IFMT) == IFDIR){
+            readDir(blockBuffer, block);
+          }
           /* restore blockBuffer */
           readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
         }
@@ -288,7 +299,9 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
 
       /* check single indirect */
       block = get4Byte(blockBuffer + 56);
-      followIndirect(block, numBlocks, blockBuffer);
+      if(block != 0 && block < numBlocks){
+        followIndirect(block, numBlocks, blockBuffer, inodeNumber, type);
+      }
       /* restore blockBuffer */
       readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
       
@@ -300,7 +313,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
         readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
         for(i=0; i < BLOCK_SIZE/sizeof(uint32_t); i++){
           val4Byte = get4Byte(blockBuffer + offset);
-          followIndirect(val4Byte, numBlocks, blockBuffer);
+          followIndirect(val4Byte, numBlocks, blockBuffer, inodeNumber, type);
           /* restore blockBuffer */
           readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
           offset += 4;
@@ -309,6 +322,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
       /* restore blockBuffer */
       readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
     }
+
   }else{
     error(18, "illegal type");
   }
@@ -459,6 +473,13 @@ int main(int argc, char *argv[]){
     }
   }
 
+  for(i = 0; i < numInodeBlocks * INOPB; i++){
+    if(allInodes[i].size != allInodes[i].computedSize){
+      if(!(allInodes[i].size < allInodes[i].computedSize && allInodes[i].size > (allInodes[i].computedSize - BLOCK_SIZE))){
+        error(14, "size of this inode is not right");
+      }
+    }
+  }
 
   fclose(disk);
   free(allInodes);
