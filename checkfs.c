@@ -48,16 +48,17 @@ void readBlock(uint32_t offset, uint8_t *blockBuffer){
 
 
 /*--- readIndirect -------------------------------------------------------------
- * read the two indirect blocks */
+ * read the two indirect blocks of inode */
 void readIndirect(int numRef,
                   BlockCnt *blocks,
                   uint32_t curBlock,
                   uint8_t * blockBuffer){
-  int cnt, offset;
+  int cnt;
+  unsigned long offset;
   uint32_t val4Byte;
   
   offset = 0;
-  /* second to last single indirect and last double indirect */
+  /* second to last single indirect */
   if(numRef == INORE-2){
     /* 4 byte for every entry in indirect block */
     for(cnt=0; cnt < BLOCK_SIZE/sizeof(uint32_t); cnt++){
@@ -67,18 +68,22 @@ void readIndirect(int numRef,
       }
       offset += 4;
     }
-  }else if(numRef == INORE-1){
+  }else if(numRef == INORE-1){ /* last double indirect */
     for(cnt=0; cnt < BLOCK_SIZE/sizeof(uint32_t); cnt++){
       val4Byte = get4Byte(blockBuffer + offset);
+      blocks[val4Byte].file += 1;
       /* second indirect block */
       readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
       readIndirect(numRef-1, blocks, curBlock, blockBuffer);
       /* first indirect block */
       readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
+      offset += 4;
     }
   }
 }
 
+
+/* follow indirect blocks */
 void followIndirect(uint32_t block, uint32_t numBlocks, uint8_t *blockBuffer, uint32_t inodeNumber, uint32_t type){
   uint32_t val4Byte;
   int cnt, offset;
@@ -200,6 +205,7 @@ void readInodes(uint32_t numInodeBlocks,
     curBlock++;
   }
   
+  printf("%lu %lu\n", (unsigned long)blocks[3154].file, (unsigned long)blocks[3154].freelist);
   curBlock = 1;
   /* check free list, position in super block */
   readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
