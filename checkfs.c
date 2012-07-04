@@ -205,7 +205,6 @@ void readInodes(uint32_t numInodeBlocks,
     curBlock++;
   }
   
-  printf("%lu %lu\n", (unsigned long)blocks[3154].file, (unsigned long)blocks[3154].freelist);
   curBlock = 1;
   /* check free list, position in super block */
   readBlock(ptrStart * SECTOR_SIZE + curBlock * BLOCK_SIZE, blockBuffer);
