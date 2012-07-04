@@ -510,9 +510,10 @@ int main(int argc, char *argv[]){
       if(!(allInodes[i].size < allInodes[i].computedSize && allInodes[i].size > (allInodes[i].computedSize - BLOCK_SIZE))){
         error(14, "size of this inode is not right");
       }
-      if(allInodes[i].nlnks == 0 && allInodes[i].computedSize){
+      
+    }
+    if(allInodes[i].nlnks == 0 && allInodes[i].computedSize > 0){
         error(16, "inode with linkcount 0 is not free");
-      }
     }
   }
 
