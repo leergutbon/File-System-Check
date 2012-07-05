@@ -375,7 +375,7 @@ void goThroughInodes(uint8_t *blockBuffer, uint32_t targetBlock){
   for(i = 0; i < INOPB; i++){
     if((get4Byte(blockBuffer) & IFMT) == IFDIR && get4Byte(blockBuffer +4) == 0){
       printf("%lu %d\n", (unsigned long)targetBlock, i);
-      error(21, "Inode/Directory %lu cannot be reached from root.", (unsigned long)((targetBlock-2)*64+i));
+      error(21, "Inode %lu cannot be reached from root.", (unsigned long)((targetBlock-2)*64+i));
     }
     nlnks[i + (targetBlock -2)*INOPB] = get4Byte(blockBuffer + 4);
     blockBuffer += 64;
