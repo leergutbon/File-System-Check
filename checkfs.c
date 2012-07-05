@@ -89,9 +89,9 @@ void followIndirect(uint32_t block, uint32_t numBlocks, uint8_t *blockBuffer, ui
   int cnt, offset;
   if(block != 0 && block < numBlocks){
     /* set blockBuffer to the target block */
-    readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
     offset = 0;
     for(cnt=0; cnt < BLOCK_SIZE/sizeof(uint32_t); cnt++){
+      readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
       val4Byte = get4Byte(blockBuffer + offset);
       if(val4Byte > 0 && val4Byte < numBlocks){
         allInodes[inodeNumber].computedSize += BLOCK_SIZE;
@@ -239,7 +239,7 @@ void readInodes(uint32_t numInodeBlocks,
 void readDir(uint8_t *blockBuffer, uint32_t block){
   uint8_t *p;
   int i;
-  uint32_t inode;
+  uint32_t inode, name;
 
   readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
   
@@ -249,15 +249,20 @@ void readDir(uint8_t *blockBuffer, uint32_t block){
    /* get the next 4 Bytes, which is the inode of
     * this sub-directory/file */
    inode = get4Byte(p);
+   name = get4Byte(p + 4);
+
    /* increment counter of current(i == 0) and parent
     * (i == 1) directory */
-   if(i < 2){
+   if(i == 0 && 771751936 == name){
+    allInodes[inode].nlnks += 1;
+   }
+   if(i == 1 && 774766592 == name){
     allInodes[inode].nlnks += 1;
    }
    if(inode != 0){
     /* if inode is not 0, current or parent directory
      * read this inode */
-    if(i >= 2){
+    if(i >= 2 || (name != 771751936 && name != 774766592 && inode != 0)){
       readSingleInode(blockBuffer, inode);
       /* restore blockBuffer */
       readBlock(ptrStart * SECTOR_SIZE + block * BLOCK_SIZE, blockBuffer);
@@ -357,7 +362,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
     }
 
   }else{
-    error(18, "illegal type");
+    error(19, "inode is in a directory but not free");
   }
   disk = diskBackup;
 
@@ -495,6 +500,7 @@ int main(int argc, char *argv[]){
 
 
   for(i = 0; i < numInodeBlocks * INOPB; i++){
+
     if(allInodes[i].nlnks != nlnks[i]){
       if(nlnks[i] < allInodes[i].nlnks && nlnks[i] == 0){
         error(15, "inode with linkcount 0 is in a directory");
