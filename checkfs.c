@@ -361,7 +361,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
     }
 
   }else{
-    error(19, "inode is in a directory but not free");
+    error(19, "inode %d is in a directory but not free", inodeNumber);
   }
   disk = diskBackup;
 
