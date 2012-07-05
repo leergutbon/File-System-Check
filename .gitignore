@@ -2,3 +2,5 @@
 disk.img
 tools/
 checkfs
+img/
+core

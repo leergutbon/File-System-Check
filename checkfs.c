@@ -127,7 +127,7 @@ void readLinkBlock(BlockCnt *blocks,
   val4Byte = get4Byte(blockBuffer + offset);
   
   /* first element of free list is link block */
-  if(val4Byte != 0){
+  if(val4Byte != 0 && val4Byte < numBlocks){
     blocks[val4Byte].freelist += 1;
     readBlock(ptrStart * SECTOR_SIZE + val4Byte * BLOCK_SIZE, blockBuffer);
     readLinkBlock(blocks, blockBuffer, val4Byte, 0);
