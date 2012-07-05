@@ -373,6 +373,10 @@ void goThroughInodes(uint8_t *blockBuffer, uint32_t targetBlock){
   int i;
   readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE, blockBuffer);
   for(i = 0; i < INOPB; i++){
+    if((get4Byte(blockBuffer) & IFMT) == IFDIR && get4Byte(blockBuffer +4) == 0){
+      printf("%lu %d\n", (unsigned long)targetBlock, i);
+      error(21, "Inode/Directory %lu cannot be reached from root.", (unsigned long)((targetBlock-2)*64+i));
+    }
     nlnks[i + (targetBlock -2)*INOPB] = get4Byte(blockBuffer + 4);
     blockBuffer += 64;
   }
@@ -493,13 +497,12 @@ int main(int argc, char *argv[]){
   /* it is necessary to drop the count of the root dir by 1 */
   allInodes[1].nlnks -= 1;
   
-  for(i = 2; i <  numInodeBlocks; i++){
+  for(i = 2; i < numInodeBlocks+2; i++){
     goThroughInodes(blockBuffer, i);
   }
 
 
   for(i = 0; i < numInodeBlocks * INOPB; i++){
-
     if(allInodes[i].nlnks != nlnks[i]){
       if(nlnks[i] < allInodes[i].nlnks && nlnks[i] == 0){
         error(15, "Inode with linkcount 0 is in a directory");
@@ -523,6 +526,8 @@ int main(int argc, char *argv[]){
     }
   }
 
+  printf("Du hast ein tolles Image, es wurden keine Fehler gefunden.\n");
+  
   fclose(disk);
   free(allInodes);
   free(nlnks);
