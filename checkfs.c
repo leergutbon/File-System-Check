@@ -99,13 +99,13 @@ void followIndirect(uint32_t block, uint32_t numBlocks, uint8_t *blockBuffer, ui
           readDir(blockBuffer, val4Byte);
         }
       }else if(block >= numBlocks){
-        error(99, "Block is out of range");
+        error(99, "Block %lu is out of range", (unsigned long)val4Byte);
       }
       offset += 4;
     }
     
   }else if(block >= numBlocks){
-    error(99, "Block is out of range");
+    error(99, "Block %lu is out of range", (unsigned long)block);
   }
 }
 
@@ -143,7 +143,7 @@ void readLinkBlock(BlockCnt *blocks,
       if(val4Byte > 0 && val4Byte < numBlocks){
         blocks[val4Byte].freelist += 1;
       }else if(val4Byte >= numBlocks){
-        error(99, "Block is out of range");
+        error(99, "Block %lu is out of range", (unsigned long)val4Byte);
       }
     }
     offset += 4;
@@ -183,7 +183,7 @@ void readInodes(uint32_t numInodeBlocks,
             if(val4Byte >= 0 && val4Byte < numBlocks){
               if(val4Byte != 0) blocks[val4Byte].file += 1;
             }else{
-              error(99, "Block is not in range.");
+              error(99, "Block %lu is out of range", (unsigned long)val4Byte);
             }
           }else if(z >= INORE-2 && z < INORE){ /* indirect refs */
             if(val4Byte != 0){
@@ -219,16 +219,16 @@ void readInodes(uint32_t numInodeBlocks,
 
   for(i=numInodeBlocks+2; i<numBlocks; i++){
     if(blocks[i].file == 0 && blocks[i].freelist == 0){
-      error(10, "Block is not in file and free list.");
+      error(10, "Block %lu is not in file and free list.", (unsigned long)i);
     }
     if(blocks[i].file == 1 && blocks[i].freelist == 1){
-      error(11, "Block is in file and free list.");
+      error(11, "Block %lu is in file and free list.", (unsigned long)i);
     }
     if(blocks[i].freelist > 1){
-      error(12, "Block is more than one in free list.");
+      error(12, "Block %lu is more than one in free list.", (unsigned long)i);
     }
     if(blocks[i].file > 1){
-      error(13, "Block is more than one in files");
+      error(13, "Block %lu is more than one in files", (unsigned long)i);
     }
   }
 }
@@ -318,7 +318,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
             if(block > 0 && block < numBlocks){
               readDir(blockBuffer, block);
             }else if(block >= numBlocks){
-              error(99, "Block is not in range");
+              error(99, "Block %lu is out of range", (unsigned long)block);
             }
           }
           /* restore blockBuffer */
@@ -331,7 +331,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
       if(block != 0 && block < numBlocks){
         followIndirect(block, numBlocks, blockBuffer, inodeNumber, type);
       }else if(block > numBlocks){
-        error(99, "Block is not in range");
+        error(99, "Block %lu is out of range", (unsigned long)block);
       }
       /* restore blockBuffer */
       readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
@@ -350,7 +350,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
           offset += 4;
         }
       }else if(block > numBlocks){
-        error(99, "Block is not in range");
+        error(99, "Block %lu is out of range", (unsigned long)block);
       }
       /* restore blockBuffer */
       readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE + targetInode * INOSI, blockBuffer);
@@ -428,7 +428,7 @@ int main(int argc, char *argv[]){
   disk = fopen((char *)diskName, "rb");
   fseek(disk, 1 * SECTOR_SIZE, SEEK_SET);
   if(fread(ptrTable, 1, SECTOR_SIZE, disk) != SECTOR_SIZE){
-    error(3, "cannot read partition table from disk image '%s'", diskName);
+    error(3, "Cannot read partition table from disk image '%s'", diskName);
   }
   
   /* check partition entry */
@@ -451,7 +451,7 @@ int main(int argc, char *argv[]){
   printf("and %lu (0x%lX) blocks of %d bytes each.\n",
          (unsigned long)numBlocks, (unsigned long)numBlocks, BLOCK_SIZE);
   if (numBlocks < 2) {
-    error(9, "file system has less than 2 blocks");
+    error(9, "File system has less than 2 blocks.");
   }
 
   /* partition start and size */
@@ -462,7 +462,7 @@ int main(int argc, char *argv[]){
    * block number 1 == super block */
   fseek(disk, ptrStart * SECTOR_SIZE + 1 * BLOCK_SIZE, SEEK_SET);
   if (fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
-    error(9, "cannot read block %lu (0x%lX)",
+    error(9, "Cannot read block %lu (0x%lX)",
           (unsigned long)blockBuffer, (unsigned long)blockBuffer);
   }
   numInodeBlocks = get4Byte(blockBuffer + 8);
@@ -481,7 +481,7 @@ int main(int argc, char *argv[]){
   allInodes = malloc (sizeof (Inode) * (numInodeBlocks * INOPB));
   nlnks = malloc(sizeof(uint32_t) * (numInodeBlocks * INOPB));
   if(allInodes == NULL){
-    error(6, "malloc didn't work.");
+    error(6, "Malloc didn't work, maybe memory is full.");
   }
   for(i = 0; i < numInodeBlocks * INOPB; i++){
     allInodes[i].nlnks = 0;
@@ -502,11 +502,11 @@ int main(int argc, char *argv[]){
 
     if(allInodes[i].nlnks != nlnks[i]){
       if(nlnks[i] < allInodes[i].nlnks && nlnks[i] == 0){
-        error(15, "inode with linkcount 0 is in a directory");
+        error(15, "Inode with linkcount 0 is in a directory");
       }else if(allInodes[i].nlnks == 0){
-        error(21, "directory cannot be reached from root");
+        error(21, "Directory cannot be reached from root");
       }else{
-        error(17, "inode doesn't show up in exactly %d directories", nlnks[i]);
+        error(17, "Inode doesn't show up in exactly %d directories", nlnks[i]);
       }
     }
   }
@@ -514,12 +514,12 @@ int main(int argc, char *argv[]){
   for(i = 0; i < numInodeBlocks * INOPB; i++){
     if(allInodes[i].size != allInodes[i].computedSize){
       if(!(allInodes[i].size < allInodes[i].computedSize && allInodes[i].size > (allInodes[i].computedSize - BLOCK_SIZE))){
-        error(14, "size of this inode is not right");
+        error(14, "Size of this inode is not right");
       }
       
     }
     if(allInodes[i].nlnks == 0 && allInodes[i].computedSize > 0){
-        error(16, "inode with linkcount 0 is not free");
+        error(16, "Inode with linkcount 0 is not free");
     }
   }
 
