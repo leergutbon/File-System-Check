@@ -225,10 +225,10 @@ void readInodes(uint32_t numInodeBlocks,
       error(11, "Block %lu is in file and free list.", (unsigned long)i);
     }
     if(blocks[i].freelist > 1){
-      error(12, "Block %lu is more than one in free list.", (unsigned long)i);
+      error(12, "Block %lu is more than one time in free list.", (unsigned long)i);
     }
     if(blocks[i].file > 1){
-      error(13, "Block %lu is more than one in files", (unsigned long)i);
+      error(13, "Block %lu is more than one time in a file or in more than one file", (unsigned long)i);
     }
   }
 }
@@ -303,7 +303,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
   allInodes[inodeNumber].size = get4Byte(blockBuffer + 28);
   if(type != 0){
     if ((type & IFMT) != IFREG && (type & IFMT) != IFDIR && (type & IFMT) != IFCHR && (type & IFMT) != IFBLK) {
-        error(18, "illegal type");
+        error(18, "illegal type %1X in inode %d", type, inodeNumber);
     } else if ((type & IFMT) == IFDIR || (type & IFMT) == IFREG) {
       /* if this inode is a directory or reg file loop through all direct
        * blocks of this inode */
@@ -357,7 +357,7 @@ void readSingleInode(uint8_t *blockBuffer, uint32_t inodeNumber){
     }else if((type & IFMT) == IFCHR ||  (type & IFMT) == IFBLK){
 
     }else{
-      error(18, "illegal type");
+      error(18, "illegal type %d in inode %d", type, inodeNumber);
     }
 
   }else{
@@ -374,7 +374,6 @@ void goThroughInodes(uint8_t *blockBuffer, uint32_t targetBlock){
   readBlock(ptrStart * SECTOR_SIZE + targetBlock * BLOCK_SIZE, blockBuffer);
   for(i = 0; i < INOPB; i++){
     if((get4Byte(blockBuffer) & IFMT) == IFDIR && get4Byte(blockBuffer +4) == 0){
-      printf("%lu %d\n", (unsigned long)targetBlock, i);
       error(21, "Inode %lu cannot be reached from root.", (unsigned long)((targetBlock-2)*64+i));
     }
     nlnks[i + (targetBlock -2)*INOPB] = get4Byte(blockBuffer + 4);
@@ -505,11 +504,11 @@ int main(int argc, char *argv[]){
   for(i = 0; i < numInodeBlocks * INOPB; i++){
     if(allInodes[i].nlnks != nlnks[i]){
       if(nlnks[i] < allInodes[i].nlnks && nlnks[i] == 0){
-        error(15, "Inode with linkcount 0 is in a directory");
+        error(15, "Inode %d with linkcount 0 is in a directory", i);
       }else if(allInodes[i].nlnks == 0){
         error(21, "Directory cannot be reached from root");
       }else{
-        error(17, "Inode doesn't show up in exactly %d directories", nlnks[i]);
+        error(17, "Inode %d doesn't show up in exactly %d directories", i, nlnks[i]);
       }
     }
   }
@@ -517,12 +516,12 @@ int main(int argc, char *argv[]){
   for(i = 0; i < numInodeBlocks * INOPB; i++){
     if(allInodes[i].size != allInodes[i].computedSize){
       if(!(allInodes[i].size < allInodes[i].computedSize && allInodes[i].size > (allInodes[i].computedSize - BLOCK_SIZE))){
-        error(14, "Size of this inode is not right");
+        error(14, "Size of inode %d is not right", i);
       }
       
     }
     if(allInodes[i].nlnks == 0 && allInodes[i].computedSize > 0){
-        error(16, "Inode with linkcount 0 is not free");
+        error(16, "Inode %d with linkcount 0 is not free", i);
     }
   }
 
